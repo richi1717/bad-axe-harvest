@@ -9,8 +9,8 @@ import UndoIcon from '@mui/icons-material/Undo';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import EditIcon from '@mui/icons-material/Edit';
-import { PRODUCTS } from '../data/products';
 import { useInventory } from '../hooks/useInventory';
+import { useProducts } from '../hooks/useProducts';
 import type { Product } from '../types';
 
 interface PickerCardProps {
@@ -323,6 +323,7 @@ function CounterView({ product, expected, onSave, onBack }: CounterViewProps) {
 
 export function CountPage() {
   const { inventory, setStock } = useInventory();
+  const { products } = useProducts();
   const [active, setActive] = useState<Product | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -359,7 +360,7 @@ export function CountPage() {
 
       <Box sx={{ px: 1.5 }}>
         <Grid container spacing={1.5}>
-          {PRODUCTS.map(product => (
+          {products.map(product => (
             <Grid key={product.id} size={{ xs: 6, sm: 4, md: 3 }}>
               <PickerCard
                 product={product}

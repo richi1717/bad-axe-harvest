@@ -429,8 +429,10 @@ export function AddItemWizard({ open, onClose, onAdd }: Props) {
   const finalUnit = isCustomUnit ? customUnit : unit;
 
   const filteredItems = useMemo(() => {
-    if (!search) return COMMON_ITEMS;
-    return COMMON_ITEMS.filter(item => item.toLowerCase().includes(search.toLowerCase()));
+    const base = search
+      ? COMMON_ITEMS.filter(item => item.toLowerCase().includes(search.toLowerCase()))
+      : COMMON_ITEMS;
+    return [...base].sort((a, b) => a.localeCompare(b));
   }, [search]);
 
   const reset = useCallback(() => {

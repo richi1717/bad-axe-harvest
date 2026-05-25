@@ -1,44 +1,75 @@
-import { useState, useCallback } from 'react';
-import { loadProducts } from './useProducts';
-
-const STORAGE_KEY = 'bah_inventory';
-
-function loadInventory(): Record<string, number> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return Object.fromEntries(loadProducts().map(p => [p.id, p.initialStock]));
-}
-
-function saveInventory(inventory: Record<string, number>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(inventory));
-}
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { supabase } from '../lib/supabase'
+import { useAppContext } from '../context/AppContext'
 
 export function useInventory() {
-  const [inventory, setInventory] = useState<Record<string, number>>(loadInventory);
+  const { farm } = useAppContext()
+  const [inventory, setInventory] = useState<Record<string, number>>({})
+  const syncedRef = useRef<Record<string, number>>({})
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (!farm) return
+    supabase
+      .from('inventory')
+      .select('product_id, quantity')
+      .eq('farm_id', farm.id)
+      .then(({ data }) => {
+        if (data) {
+          const map = Object.fromEntries(
+            data.map((r) => [r.product_id, r.quantity]),
+          )
+          setInventory(map)
+          syncedRef.current = map
+        }
+      })
+  }, [farm])
+
+  useEffect(() => {
+    if (!farm) return
+
+    const dirty = Object.entries(inventory).filter(
+      ([id, qty]) => syncedRef.current[id] !== qty,
+    )
+
+    if (dirty.length === 0) return
+
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      for (const [productId, quantity] of dirty) {
+        const { error } = await supabase
+          .from('inventory')
+          .upsert(
+            { farm_id: farm.id, product_id: productId, quantity },
+            { onConflict: 'farm_id,product_id' },
+          )
+        if (error) console.error('[inventory]', error)
+        else syncedRef.current[productId] = quantity
+      }
+    }, 800)
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [inventory, farm])
 
   const decrementStock = useCallback((productId: string, qty = 1) => {
-    setInventory(prev => {
-      const next = { ...prev, [productId]: Math.max(0, (prev[productId] ?? 0) - qty) };
-      saveInventory(next);
-      return next;
-    });
-  }, []);
+    setInventory((prev) => ({
+      ...prev,
+      [productId]: (prev[productId] ?? 0) - qty,
+    }))
+  }, [])
 
   const setStock = useCallback((productId: string, qty: number) => {
-    setInventory(prev => {
-      const next = { ...prev, [productId]: Math.max(0, qty) };
-      saveInventory(next);
-      return next;
-    });
-  }, []);
+    setInventory((prev) => ({ ...prev, [productId]: qty }))
+  }, [])
 
-  const resetInventory = useCallback(() => {
-    const fresh = Object.fromEntries(loadProducts().map(p => [p.id, p.initialStock]));
-    saveInventory(fresh);
-    setInventory(fresh);
-  }, []);
+  const resetInventory = useCallback(async () => {
+    if (!farm) return
+    await supabase.from('inventory').delete().eq('farm_id', farm.id)
+    setInventory({})
+    syncedRef.current = {}
+  }, [farm])
 
-  return { inventory, decrementStock, setStock, resetInventory };
+  return { inventory, decrementStock, setStock, resetInventory }
 }
