@@ -59,5 +59,15 @@ export function useProducts() {
     setProducts(prev => prev.filter(p => p.id !== id));
   }, []);
 
-  return { products, addProduct, removeProduct };
+  const updatePrice = useCallback(async (id: string, price: number) => {
+    const { data } = await supabase
+      .from('products')
+      .update({ price })
+      .eq('id', id)
+      .select()
+      .single();
+    if (data) setProducts(prev => prev.map(p => p.id === id ? toProduct(data) : p));
+  }, []);
+
+  return { products, addProduct, removeProduct, updatePrice };
 }

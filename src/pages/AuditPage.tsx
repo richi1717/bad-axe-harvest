@@ -35,6 +35,7 @@ interface AuditRowProps {
   onDecrement: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onPriceEdit: () => void;
 }
 
 function AuditRow({
@@ -46,6 +47,7 @@ function AuditRow({
   onDecrement,
   onEdit,
   onDelete,
+  onPriceEdit,
 }: AuditRowProps) {
   const changed = stock !== original;
   const delta = stock - original;
@@ -109,9 +111,14 @@ function AuditRow({
                 flexShrink: 0,
               }}
             />
-            <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>
-              per {product.unit}
-            </Typography>
+            <Box
+              onClick={onPriceEdit}
+              sx={{ cursor: "pointer", "&:active": { opacity: 0.7 } }}
+            >
+              <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>
+                ${product.price.toFixed(2)}/{product.unit}
+              </Typography>
+            </Box>
             {changed && (
               <Typography
                 sx={{ fontSize: "0.75rem", color: "#F59E0B", fontWeight: 700 }}
@@ -194,16 +201,13 @@ function AuditRow({
 }
 
 export function AuditPage() {
-  const { inventory, setStock } = useInventory();
-  const { products, removeProduct } = useProducts();
-  const [sessionStart] = useState<Record<string, number>>(() =>
-    Object.fromEntries(
-      products.map((p) => [p.id, inventory[p.id] ?? p.initialStock]),
-    ),
-  );
+  const { inventory, savedInventory, setStock } = useInventory();
+  const { products, removeProduct, updatePrice } = useProducts();
   const [editTarget, setEditTarget] = useState<Product | null>(null);
   const [editValue, setEditValue] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [priceTarget, setPriceTarget] = useState<Product | null>(null);
+  const [priceValue, setPriceValue] = useState("");
   const [editMode, setEditMode] = useState(false);
 
   const getStock = useCallback(
@@ -233,8 +237,15 @@ export function AuditPage() {
     if (products.length <= 1) setEditMode(false);
   }, [deleteTarget, removeProduct, products.length]);
 
+  const confirmPriceEdit = useCallback(() => {
+    if (!priceTarget) return;
+    const n = parseFloat(priceValue);
+    if (!isNaN(n) && n >= 0) updatePrice(priceTarget.id, n);
+    setPriceTarget(null);
+  }, [priceTarget, priceValue, updatePrice]);
+
   const changedCount = products.filter(
-    (p) => getStock(p) !== (sessionStart[p.id] ?? p.initialStock),
+    (p) => getStock(p) !== (savedInventory[p.id] ?? p.initialStock),
   ).length;
 
   return (
@@ -292,12 +303,13 @@ export function AuditPage() {
             key={product.id}
             product={product}
             stock={getStock(product)}
-            original={sessionStart[product.id] ?? product.initialStock}
+            original={savedInventory[product.id] ?? product.initialStock}
             editing={editMode}
             onIncrement={() => setStock(product.id, getStock(product) + 1)}
             onDecrement={() => setStock(product.id, getStock(product) - 1)}
             onEdit={() => handleEdit(product)}
             onDelete={() => setDeleteTarget(product)}
+            onPriceEdit={() => { setPriceTarget(product); setPriceValue(product.price.toFixed(2)); }}
           />
         ))}
       </Box>
@@ -419,6 +431,59 @@ export function AuditPage() {
             }}
           >
             Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={!!priceTarget}
+        onClose={() => setPriceTarget(null)}
+        slotProps={{
+          paper: { sx: { bgcolor: "#1C1C1C", borderRadius: 4, px: 1, pb: 1, width: "100%", maxWidth: 320 } },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, fontSize: "1.1rem", pb: 1 }}>
+          {priceTarget?.emoji} Set price
+        </DialogTitle>
+        <DialogContent sx={{ pb: 1 }}>
+          <TextField
+            autoFocus
+            fullWidth
+            type="number"
+            value={priceValue}
+            onChange={(e) => setPriceValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") confirmPriceEdit(); }}
+            slotProps={{
+              htmlInput: {
+                inputMode: "decimal",
+                min: 0,
+                step: 0.01,
+                style: { fontSize: "2.5rem", fontWeight: 900, textAlign: "center", padding: "12px 8px" },
+              },
+            }}
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 2,
+                "& fieldset": { borderColor: "#333" },
+                "&:hover fieldset": { borderColor: "#555" },
+                "&.Mui-focused fieldset": { borderColor: "#F59E0B" },
+              },
+            }}
+          />
+          <Typography sx={{ textAlign: "center", color: "text.secondary", fontSize: "0.8rem", mt: 1 }}>
+            per {priceTarget?.unit}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, gap: 1 }}>
+          <Button onClick={() => setPriceTarget(null)} sx={{ color: "#666", fontWeight: 700, flex: 1 }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={confirmPriceEdit}
+            sx={{ bgcolor: "#F59E0B", color: "#000", fontWeight: 900, flex: 1, "&:hover": { bgcolor: "#D97706" } }}
+          >
+            Set
           </Button>
         </DialogActions>
       </Dialog>

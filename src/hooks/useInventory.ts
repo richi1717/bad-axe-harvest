@@ -5,6 +5,7 @@ import { useAppContext } from '../context/AppContext'
 export function useInventory() {
   const { farm } = useAppContext()
   const [inventory, setInventory] = useState<Record<string, number>>({})
+  const [savedInventory, setSavedInventory] = useState<Record<string, number>>({})
   const syncedRef = useRef<Record<string, number>>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -20,6 +21,7 @@ export function useInventory() {
             data.map((r) => [r.product_id, r.quantity]),
           )
           setInventory(map)
+          setSavedInventory(map)
           syncedRef.current = map
         }
       })
@@ -44,7 +46,10 @@ export function useInventory() {
             { onConflict: 'farm_id,product_id' },
           )
         if (error) console.error('[inventory]', error)
-        else syncedRef.current[productId] = quantity
+        else {
+          syncedRef.current[productId] = quantity
+          setSavedInventory((prev) => ({ ...prev, [productId]: quantity }))
+        }
       }
     }, 800)
 
@@ -68,8 +73,9 @@ export function useInventory() {
     if (!farm) return
     await supabase.from('inventory').delete().eq('farm_id', farm.id)
     setInventory({})
+    setSavedInventory({})
     syncedRef.current = {}
   }, [farm])
 
-  return { inventory, decrementStock, setStock, resetInventory }
+  return { inventory, savedInventory, decrementStock, setStock, resetInventory }
 }

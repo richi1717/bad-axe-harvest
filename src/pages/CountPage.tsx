@@ -328,10 +328,11 @@ export function CountPage() {
   const [saved, setSaved] = useState(false);
 
   const handleSave = useCallback((product: Product, count: number) => {
-    setStock(product.id, count);
+    const current = inventory[product.id] ?? product.initialStock;
+    setStock(product.id, current + count);
     setActive(null);
     setSaved(true);
-  }, [setStock]);
+  }, [inventory, setStock]);
 
   if (active) {
     return (
